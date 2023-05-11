@@ -861,6 +861,16 @@ module ActiveMerchant #:nodoc:
                 source_card_last_four: credit_card_or_vault_id.last_digits,
                 eci_indicator: credit_card_or_vault_id.eci
               }
+            else
+              parameters[:credit_card] = {
+                number: credit_card_or_vault_id.number,
+                expiration_month: credit_card_or_vault_id.month.to_s.rjust(2, '0'),
+                expiration_year: credit_card_or_vault_id.year.to_s,
+                network_tokenization_attributes: {
+                  cryptogram: credit_card_or_vault_id.payment_cryptogram,
+                  ecommerce_indicator: credit_card_or_vault_id.eci
+                }
+              }
             end
           else
             parameters[:credit_card] = {

@@ -31,6 +31,11 @@ class RemoteBraintreeBlueTest < Test::Unit::TestCase
       },
       ach_mandate: ach_mandate
     }
+
+    @nt_credit_card = network_tokenization_credit_card('5105105105105100',
+      brand: 'visa',
+      source: :network_token,
+      payment_cryptogram: 'AgAAAAAAosVKVV7FplLgQRYAAAA=')
   end
 
   def test_credit_card_details_on_store
@@ -49,6 +54,13 @@ class RemoteBraintreeBlueTest < Test::Unit::TestCase
 
   def test_successful_authorize
     assert response = @gateway.authorize(@amount, @credit_card, @options)
+    assert_success response
+    assert_equal '1000 Approved', response.message
+    assert_equal 'authorized', response.params['braintree_transaction']['status']
+  end
+
+  def test_successful_authorize_with_nt
+    assert response = @gateway.authorize(@amount, @nt_credit_card, @options)
     assert_success response
     assert_equal '1000 Approved', response.message
     assert_equal 'authorized', response.params['braintree_transaction']['status']
