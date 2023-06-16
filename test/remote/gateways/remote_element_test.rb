@@ -132,6 +132,64 @@ class RemoteElementTest < Test::Unit::TestCase
     assert_equal 'Approved', response.message
   end
 
+  def test_successful_purchase_with_lodging_fields
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_agreement_nummber: '182726718192'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_check_in_date: '09/12/2025'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_check_out_date: '10/12/2025'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_room_amount: '1000'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_room_tax: '50'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_no_show_indicator: '1'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_duration: '10'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_customer_name: 'francois dubois'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_client_code: '1019182'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_extra_charges_detail: 'room service'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_extra_charges_amount: '1025'))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_prestigious_property_code: 2))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_special_program_code: 23))
+    assert_success response
+    assert_equal 'Approved', response.message
+
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(lodging_charge_type: 4))
+    assert_success response
+    assert_equal 'Approved', response.message
+  end
+
   def test_successful_purchase_with_terminal_id
     response = @gateway.purchase(@amount, @credit_card, @options.merge(terminal_id: '02'))
     assert_success response

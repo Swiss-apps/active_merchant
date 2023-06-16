@@ -154,6 +154,128 @@ class ElementTest < Test::Unit::TestCase
     assert_success response
   end
 
+  def test_successful_purchase_with_lodging_fields
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_agreement_nummber: '182726718192'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingAgreementNumber>182726718192</LodgingAgreementNumber>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_check_in_date: '09/12/2025'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingCheckInDate>09/12/2025</LodgingCheckInDate>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_check_out_date: '10/12/2025'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingCheckoutDate>10/12/2025</LodgingCheckoutDate>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_room_amount: '1000'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingRoomAmount>1000</LodgingRoomAmount>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_agreement_nummber: '182726718192'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingAgreementNumber>182726718192</LodgingAgreementNumber>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_room_tax: '50'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingRoomTax>50</LodgingRoomTax>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_no_show_indicator: '1'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingNoShowIndicator>1</LodgingNoShowIndicator>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_duration: '10'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingDuration>10</LodgingDuration>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_customer_name: 'francois dubois'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingCustomerName>francois dubois</LodgingCustomerName>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_client_code: '1019182'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingClientCode>1019182</LodgingClientCode>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_extra_charges_detail: 'room service'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingExtraChargesDetail>room service</LodgingExtraChargesDetail>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_extra_charges_amount: '1025'))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingExtraChargesAmounts>1025</LodgingExtraChargesAmounts>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_prestigious_property_code: 2))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingPrestigiousPropertyCode>2</LodgingPrestigiousPropertyCode>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_special_program_code: 23))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingSpecialProgramCode>23</LodgingSpecialProgramCode>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options.merge(lodging_charge_type: 4))
+    end.check_request do |_endpoint, data, _headers|
+      assert_match '<LodgingChargeType>4</LodgingChargeType>', data
+    end.respond_with(successful_purchase_response)
+
+    assert_success response
+  end
+
   def test_successful_purchase_with_payment_type
     response = stub_comms do
       @gateway.purchase(@amount, @credit_card, @options.merge(payment_type: 'NotUsed'))

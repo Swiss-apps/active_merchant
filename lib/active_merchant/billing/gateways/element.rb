@@ -36,6 +36,7 @@ module ActiveMerchant #:nodoc:
             add_payment_method(xml, payment)
             add_transaction(xml, money, options)
             add_terminal(xml, options)
+            add_lodging(xml, options)
             add_address(xml, options)
           end
         end
@@ -50,6 +51,7 @@ module ActiveMerchant #:nodoc:
             add_payment_method(xml, payment)
             add_transaction(xml, money, options)
             add_terminal(xml, options)
+            add_lodging(xml, options)
             add_address(xml, options)
           end
         end
@@ -66,6 +68,7 @@ module ActiveMerchant #:nodoc:
             add_credentials(xml)
             add_transaction(xml, money, options)
             add_terminal(xml, options)
+            add_lodging(xml, options)
           end
         end
 
@@ -81,6 +84,7 @@ module ActiveMerchant #:nodoc:
             add_credentials(xml)
             add_transaction(xml, money, options)
             add_terminal(xml, options)
+            add_lodging(xml, options)
           end
         end
 
@@ -94,6 +98,7 @@ module ActiveMerchant #:nodoc:
             add_payment_method(xml, payment)
             add_transaction(xml, money, options)
             add_terminal(xml, options)
+            add_lodging(xml, options)
           end
         end
 
@@ -109,6 +114,7 @@ module ActiveMerchant #:nodoc:
             add_credentials(xml)
             add_transaction(xml, trans_amount, options)
             add_terminal(xml, options)
+            add_lodging(xml, options)
           end
         end
 
@@ -135,6 +141,7 @@ module ActiveMerchant #:nodoc:
             add_payment_method(xml, credit_card)
             add_transaction(xml, 0, options)
             add_terminal(xml, options)
+            add_lodging(xml, options)
             add_address(xml, options)
           end
         end
@@ -220,6 +227,25 @@ module ActiveMerchant #:nodoc:
 
       def market_code(money, options)
         options[:market_code] || 'Default'
+      end
+
+      def add_lodging(xml, options)
+        xml.lodging do
+          xml.LodgingAgreementNumber options[:lodging_agreement_nummber] if options[:lodging_agreement_nummber]
+          xml.LodgingCheckInDate options[:lodging_check_in_date] if options[:lodging_check_in_date]
+          xml.LodgingCheckoutDate options[:lodging_check_out_date] if options[:lodging_check_out_date]
+          xml.LodgingRoomAmount options[:lodging_room_amount] if options[:lodging_room_amount]
+          xml.LodgingRoomTax options[:lodging_room_tax] if options[:lodging_room_tax]
+          xml.LodgingNoShowIndicator options[:lodging_no_show_indicator] if options[:lodging_no_show_indicator]
+          xml.LodgingDuration options[:lodging_duration] if options[:lodging_duration]
+          xml.LodgingCustomerName options[:lodging_customer_name] if options[:lodging_customer_name]
+          xml.LodgingClientCode options[:lodging_client_code] if options[:lodging_client_code]
+          xml.LodgingExtraChargesDetail options[:lodging_extra_charges_detail] if options[:lodging_extra_charges_detail]
+          xml.LodgingExtraChargesAmounts options[:lodging_extra_charges_amount] if options[:lodging_extra_charges_amount]
+          xml.LodgingPrestigiousPropertyCode options[:lodging_prestigious_property_code] if options[:lodging_prestigious_property_code]
+          xml.LodgingSpecialProgramCode options[:lodging_special_program_code] if options[:lodging_special_program_code]
+          xml.LodgingChargeType options[:lodging_charge_type] if options[:lodging_charge_type]
+        end
       end
 
       def add_terminal(xml, options)
