@@ -68,6 +68,8 @@ module ActiveMerchant #:nodoc:
         add_application_info(post, options)
         add_level_2_data(post, options)
         add_level_3_data(post, options)
+        add_data_airline(post, options)
+        add_data_lodging(post, options)
         commit('authorise', post, options)
       end
 
@@ -288,6 +290,81 @@ module ActiveMerchant #:nodoc:
             post[:additionalData].merge!(extract_and_transform(mapper, item))
           end
         end
+        post[:additionalData].compact!
+      end
+
+      def add_data_airline(post, options)
+        return unless options[:additional_data_airline]
+
+        mapper = {
+          'airline.agency_invoice_number': 'agency_invoice_number',
+          'airline.agency_plan_name': 'agency_plan_name',
+          'airline.airline_code': 'airline_code',
+          'airline.airline_designator_code': 'airline_designator_code',
+          'airline.boarding_fee': 'boarding_fee',
+          'airline.computerized_reservation_system': 'computerized_reservation_system',
+          'airline.customer_reference_number': 'customer_reference_number',
+          'airline.document_type': 'document_type',
+          'airline.flight_date': 'flight_date',
+          'airline.ticket_issue_address': 'ticket_issue_address',
+          'airline.ticket_number ': 'ticket_number',
+          'airline.travel_agency_code': 'travel_agency_code',
+          'airline.travel_agency_name': 'travel_agency_name',
+          'airline.passenger_name': 'passenger_name'
+        }
+
+        post[:additionalData].merge!(extract_and_transform(mapper, options[:additional_data_airline]))
+
+        if options[:additional_data_airline][:leg].present?
+          leg_data = {
+            'airline.leg.carrier_code': 'carrier_code',
+            'airline.leg.class_of_travel': 'class_of_travel',
+            'airline.leg.date_of_travel': 'date_of_travel',
+            'airline.leg.depart_airport': 'depart_airport',
+            'airline.leg.depart_tax': 'depart_tax',
+            'airline.leg.destination_code': 'destination_code',
+            'airline.leg.fare_base_code': 'fare_base_code',
+            'airline.leg.flight_number': 'flight_number',
+            'airline.leg.stop_over_code': 'stop_over_code'
+          }
+
+          post[:additionalData].merge!(extract_and_transform(leg_data, options[:additional_data_airline][:leg]))
+        end
+
+        if options[:additional_data_airline][:passenger].present?
+          passenger_data = {
+            'airline.passenger.date_of_birth': 'date_of_birth',
+            'airline.passenger.first_name': 'first_name',
+            'airline.passenger.last_name': 'last_name',
+            'airline.passenger.telephone_number': 'telephone_number',
+            'airline.passenger.traveller_type': 'traveller_type'
+          }
+          post[:additionalData].merge!(extract_and_transform(passenger_data, options[:additional_data_airline][:passenger]))
+        end
+        post[:additionalData].compact!
+      end
+
+      def add_data_lodging(post, options)
+        return unless options[:additional_data_lodging]
+
+        mapper = {
+          'lodging.checkInDate': 'check_in_date',
+          'lodging.checkOutDate': 'check_out_date',
+          'lodging.customerServiceTollFreeNumber': 'customer_service_toll_free_number',
+          'lodging.fireSafetyActIndicator': 'fire_safety_act_indicator',
+          'lodging.folioCashAdvances': 'folio_cash_advances',
+          'lodging.folioNumber': 'folio_number',
+          'lodging.foodBeverageCharges': 'food_beverage_charges',
+          'lodging.noShowIndicator': 'no_show_indicator',
+          'lodging.prepaidExpenses': 'prepaid_expenses',
+          'lodging.propertyPhoneNumber': 'property_phone_number',
+          'lodging.room1.numberOfNights': 'number_of_nights',
+          'lodging.room1.rate': 'rate',
+          'lodging.totalRoomTax': 'total_room_tax',
+          'lodging.totalTax': 'totalTax'
+        }
+
+        post[:additionalData].merge!(extract_and_transform(mapper, options[:additional_data_lodging]))
         post[:additionalData].compact!
       end
 
