@@ -32,6 +32,7 @@ module ActiveMerchant
 
       def purchase(amount, payment_method, options = {})
         post ||= {}
+        amount = to_dollars(amount)
 
         add_payment_intent(post)
         add_purchase_units(post, amount, options)
@@ -48,7 +49,7 @@ module ActiveMerchant
 
       def refund(amount, authorization, options = {})
         post = {}
-
+        amount = to_dollars(amount)
         add_refund_amount(post, amount, options)
         add_refund_reason(post, options)
 
@@ -264,6 +265,11 @@ module ActiveMerchant
         else
           2
         end
+      end
+
+      def to_dollars(amount)
+        dollars = amount.to_f / 100.0
+        format('%.2f', dollars)
       end
     end
   end
