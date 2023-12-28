@@ -14,7 +14,7 @@ module ActiveMerchant
       SOFT_DECLINE_CODES = [417]
 
       def initialize(options = {})
-        requires!(options, :merchant_id, :access_token)
+        requires!(options, :merchant_id, :access_token, :fingerprint)
         super
       end
 
