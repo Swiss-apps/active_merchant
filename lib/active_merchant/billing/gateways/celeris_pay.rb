@@ -16,129 +16,234 @@ module ActiveMerchant
       def initialize(options = {})
         requires!(options, :merchant_id, :access_token, :fingerprint)
         super
+
+        init_config
       end
 
-      def purchase(amount, payment_method, options = {})
+      def purchase(amount, payment_method, options)
         post = {}
-        add_invoice(post, amount, payment_method, options)
-        add_payment_method(post, payment_method, options)
-        add_customer_details(post, options)
-        add_three_d_secure_data(post, options)
-        add_redirect_url(post, options)
-        # commit
+        set_merchant_details
+        set_address_details(options)
+        set_customer_details
+        set_payment_details(payment_method, options)
+        set_transaction(amount, options)
+        set_redirect_url(options)
+        set_dynamic_descriptor(post, options)
+        set_three_d_secure(options)
+
+        initiate_payment
+        response = @payment.without_hpp
+
+        generate_response(response)
+      rescue Celeris::ApplicationError => e
+        generate_response(e.response)
       end
 
-      def refund(amount, authorization, options = {})
+      def refund(amount, authorization, options)
         post = {}
-        add_refund_details(post, amount, options)
-        # commit
+        set_merchant_details
+        set_refund_details(amount, authorization)
+
+        response = @refund.execute
+
+        generate_response(response)
+      rescue Celeris::ApplicationError => e
+        generate_response(e.response)
       end
 
-      def store(payment_method, options = {})
-        post = {}
-        save_payment_details(post, payment_method, options)
-        # commit
+      def store(payment_method, options)
+        set_merchant_details
+        set_card_details(payment_method, options)
+
+        initiate_token
+        response = @token.save_card(options[:customer_id]&.to_s, @card_detail)
+
+        generate_response(response)
+      rescue Celeris::ApplicationError => e
+        generate_response(e.response)
       end
 
-      def confirm(options = {})
-        post = { txnReference: options[:order_id] }
-        # commit
+      def confirm(authorization)
+        set_merchant_details
+        init_transaction_status
+
+        response = @payment.transaction_status(authorization)
+
+        generate_response(response)
+      rescue Celeris::ApplicationError => e
+        generate_response(e.response)
       end
 
       private
 
-      def add_payment_method(post, payment_method, options)
-        post[:transaction][:paymentDetail] = {}
+      def set_merchant_details
+        @merchant = ::Celeris::Merchant.new(@options[:merchant_id])
+      end
+
+      def set_address_details(options)
+        return unless options[:billing_address].present?
+
+        first_name, last_name = split_names(options[:billing_address][:name])
+        phoneNo = options[:billing_address][:phone]
+
+        @address = ::Celeris::Address.new(first_name, last_name, options[:email], phoneNo)
+      end
+
+      def set_customer_details
+        @customer = ::Celeris::Customer.new(@address)
+      end
+
+      def set_payment_details(payment_method, options)
         if payment_method.is_a?(String)
-          post[:transaction][:paymentDetail][:tokenID] = payment_method
+          token = payment_method
+          @payment_detail = ::Celeris::TokenId.new(token)
         else
-          post[:transaction][:paymentDetail][:cardNumber] = payment_method.number
-          post[:transaction][:paymentDetail][:expMonth] = format(payment_method.month, :two_digits)
-          post[:transaction][:paymentDetail][:expYear] = format(payment_method.year, :four_digits)
-          post[:transaction][:paymentDetail][:cvv] = payment_method.verification_value unless empty?(payment_method.verification_value)
+          number = payment_method.number
+          month = format(payment_method.month, :two_digits)
+          year = format(payment_method.year, :four_digits)
+          name_on_card = options[:billing_address] ? options[:billing_address][:name] : ''
+          card_type = payment_method.cc_type
+          cvv = empty?(payment_method.verification_value) ? '' : payment_method.verification_value
+
+          @payment_detail = ::Celeris::CardDetail.new(number, year, month, name_on_card, card_type, cvv)
         end
       end
 
-      def add_invoice(amount, post, options)
-        post[:transaction] = {}
-        post[:transaction][:txnAmount] = amount
-        post[:transaction][:paymentMode] = 'CreditCard'
-        post[:transaction][:currencyCode] = options[:currency]
-        post[:transaction][:txnReference] = options[:order_id]
+      def set_transaction(amount, options)
+        currency = options[:currency]
+        txnReference = options[:order_id]
+        paymentMode = 'CreditCard'
+
+        @transaction = ::Celeris::Transaction.new(amount, currency, txnReference, paymentMode)
+        @transaction.paymentDetail = @payment_detail
       end
 
-      def add_customer_details(post, options)
-        post[:customer] = {}
-        post[:customer][:ipAddress] = options[:ip]
-        post[:customer][:email] = options[:email]
-        if options[:billing_address].present?
-          first_name, _ = split_names(options[:billing_address][:name])
-          options[:customer][:billing_address] = {}
-          options[:customer][:billing_address][:firstName] = first_name
-          options[:customer][:billing_address][:addressLine1] = options[:billing_address][:address1]
-          options[:customer][:billing_address][:city] = options[:billing_address][:city]
-          options[:customer][:billing_address][:state] = options[:billing_address][:state]
-          options[:customer][:billing_address][:zip] = options[:billing_address][:zip]
-          options[:customer][:billing_address][:country] = options[:billing_address][:country]
-          options[:customer][:billing_address][:mobileNo] = options[:billing_address][:phone]
-        end
-      end
-
-      def add_redirect_url(post, options)
-        post[:url] = {}
+      def set_redirect_url(options)
+        return unless options[:redirect_links]
         redirect_links = options[:redirect_links]
 
-        post[:url][:successURL] = redirect_links[:success_url] if redirect_links
-        post[:url][:failURL] = redirect_links[:failure_url] if redirect_links
-        post[:url][:cancelURL] = redirect_links[:failure_url] if redirect_links
+        @url = ::Celeris::Url.new(redirect_links[:success_url], redirect_links[:failure_url], redirect_links[:failure_url])
       end
 
-      def add_refund_details(amount, options)
-        post[:refund] = {}
-        post[:refund][:refundAmount] = amount
-        post[:refund][:txnReference] = options[:order_id]
+      def set_dynamic_descriptor(post, options)
+        post[:dynamic_descriptor] = {}
+        post[:dynamic_descriptor][:name] = options[:billing_address][:name] if options[:billing_address]
+        post[:dynamic_descriptor][:email] = options[:email]
+        post[:dynamic_descriptor][:mobile] = options[:billing_address][:phone] if options[:billing_address]
+
+        @dynamic_descriptor = ::Celeris::DynamicDescriptor.new
+        @dynamic_descriptor.name = post[:dynamic_descriptor][:name]
+        @dynamic_descriptor.email = post[:dynamic_descriptor][:email]
+        @dynamic_descriptor.mobile = post[:dynamic_descriptor][:mobile]
       end
 
-      def add_three_d_secure_data(post, options)
-        if options[:three_d_secure].present?
-          post[:transaction][:"3DSecure"] = {}
-          post[:transaction][:"3DSecure"][:externalThreeds] = {}
-          post[:transaction][:"3DSecure"][:externalThreeds][:xid] = options[:three_d_secure_data][:xid]
-          post[:transaction][:"3DSecure"][:externalThreeds][:eciCode] = options[:three_d_secure][:eci]
-          post[:transaction][:"3DSecure"][:externalThreeds][:authenticationValue] = options[:three_d_secure][:authenticationValue]
-          post[:transaction][:"3DSecure"][:externalThreeds][:threedsServerTransactionId] = options[:three_d_secure][:threedsServerTransactionId]
+      def initiate_payment
+        @payment = ::Celeris::Payment.new(@config)
+        @payment.merchant = @merchant
+        @payment.customer = @customer
+        @payment.transaction = @transaction
+        @payment.url = @url
+        @payment.dynamicDescriptor = @dynamic_descriptor
+        @payment.sync!
+      end
+
+      def set_card_details(payment_method, options)
+        number = payment_method.number
+        month = format(payment_method.month, :two_digits)
+        year = format(payment_method.year, :four_digits)
+        name_on_card = options[:billing_address] ? options[:billing_address][:name] : ''
+        card_type = payment_method.cc_type
+
+        @card_detail = ::Celeris::CardDetail.new(number, year, month, name_on_card, card_type)
+      end
+
+      def initiate_token
+        @token = ::Celeris::Token.new(@config)
+      end
+
+      def set_refund_details(amount, authorization)
+        txn_reference = authorization
+        refund_amount = amount
+
+        @refund = ::Celeris::RefundTransaction.new(@config)
+        @refund.create_refund(txn_reference, refund_amount)
+      end
+
+      def init_transaction_status
+        @payment = ::Celeris::Payment.new(@config)
+      end
+
+      def set_three_d_secure(options)
+        return unless options[:browser_details].present?
+        device_fingerprint = ::Celeris::DeviceFingerprint.new
+        browser_details = options[:browser_details]
+
+        device_fingerprint.timezone = browser_details[:time_zone]
+        device_fingerprint.browserScreenWidth, device_fingerprint.browserScreenHeight, device_fingerprint.browserColorDepth = browser_details_screen_size(browser_details)
+        device_fingerprint.browserLanguage = browser_details[:accept_language]
+        device_fingerprint.os = "windows"
+        device_fingerprint.browserAcceptHeader = browser_details[:accept_content]
+        device_fingerprint.userAgent = browser_details[:identity]
+        device_fingerprint.browserJavascriptEnabled = browser_details[:capabilities] == 'javascript' ? true : false
+        device_fingerprint.browserJavaEnabled = browser_details[:capabilities] ? false : true
+        device_fingerprint.acceptContent = browser_details[:accept_content]
+        device_fingerprint.browserIP = options[:ip]
+
+        @three_d_secure = ::Celeris::ThreeDSecure.new(device_fingerprint)
+      end
+
+      def browser_details_screen_size(browser_details)
+        browser_details[:screen_resolution].split('x') if browser_details[:screen_resolution]
+      end
+
+      def generate_response(response)
+        parsed_response = JSON.parse(response.body)
+        response_code = parsed_response["response"] ? parsed_response["response"]["responseCode"] : ''
+        response_message = parsed_response["response"] ? parsed_response["response"]["description"] : response.reason_phrase
+
+        if response.success?
+          generate_success_response(response, parsed_response, response_code, response_message)
+        else
+          generate_failure_response(response, parsed_response, response_code, response_message)
         end
       end
 
-      def save_payment_details(post, payment_method, options)
-        post[:card] = {}
-        post[:card][:cardNumber] = payment_method.number
-        post[:card][:expMonth] = format(payment_method.month, :two_digits)
-        post[:card][:expYear] = format(payment_method.year, :four_digits)
-        post[:card][:nameOnCard] = options[:billing_address][:name]
-        post[:card][:cardType] = payment_method.card_type # need card brand here to run store API
-        # cvv can not be saved
+      def generate_success_response(response, parsed_response, response_code, response_message)
+        ActiveMerchant::Billing::Response.new(
+          true,
+          response_message,
+          parsed_response,
+          {
+            authorization: authorization_from(parsed_response),
+            response_http_code: response.env&.status,
+            request_endpoint: response.env&.url&.to_s,
+            request_method: response.env&.method,
+            request_body: response.env&.request_body,
+            response_type: response_type(response_code),
+            test: test?
+          }
+        )
       end
 
-      def commit(action, params, authorization=nil)
-        params[:merchant] = { merchantID: @options[:merchant_id] }
-        request_body = post_data(action, params)
-        raw_response = ssl_request(:post, base_url, request_body, headers)
-        response = JSON.parse(raw_response)
-
-        succeeded = success_from(response)
-        Response.new(
-          succeeded,
-          message_from(succeeded, response),
-          response,
-          authorization: authorization_from(response, params["paymentType"]),
-          response_type: response_type(response.dig('result', 'code')),
-          test: test?,
-          response_http_code: @response_http_code,
-          request_endpoint:,
-          request_method: method,
-          request_body: params
+      def generate_failure_response(response, parsed_response, response_code, response_message)
+        ActiveMerchant::Billing::Response.new(
+          false,
+          response_message,
+          parsed_response,
+          {
+            error_code: response_code,
+            response_http_code: response.env&.status,
+            request_endpoint: response.env&.url&.to_s,
+            request_method: response.env&.method,
+            request_body: response.env&.request_body,
+            response_type: response_type(response_code),
+            test: test?
+          }
         )
+      end
+
+      def authorization_from(response)
+        response["response"] ? response["response"]["txnReference"] : ''
       end
 
       def response_type(code)
@@ -151,11 +256,9 @@ module ActiveMerchant
         end
       end
 
-      def base_url
-        test? ? test_url : live_url
-      end
-
-      def headers
+      def init_config
+        @config = ::Celeris::Config.new(@options[:merchant_id], @options[:access_token], @options[:fingerprint])
+        @config.staging! if test?
       end
     end
   end
