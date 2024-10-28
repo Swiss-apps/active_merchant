@@ -3,7 +3,7 @@ require 'nokogiri'
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class IxopayGateway < Gateway
-      self.test_url = 'https://secure.ixopay.com/transaction'
+      self.test_url = 'https://secure.cardflo.io/transaction'
       self.live_url = 'https://secure.ixopay.com/transaction'
 
       self.supported_countries = %w(AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW)
@@ -26,7 +26,7 @@ module ActiveMerchant #:nodoc:
           add_debit(xml, money, options)
         end
 
-        commit(request)
+        commit(:debit, request)
       end
 
       def authorize(money, payment_method, options = {})
@@ -35,7 +35,7 @@ module ActiveMerchant #:nodoc:
           add_preauth(xml, money, options)
         end
 
-        commit(request)
+        commit(:preauthorize, request)
       end
 
       def capture(money, authorization, options = {})
@@ -43,7 +43,7 @@ module ActiveMerchant #:nodoc:
           add_capture(xml, money, authorization, options)
         end
 
-        commit(request)
+        commit(:capture, request)
       end
 
       def refund(money, authorization, options = {})
@@ -51,7 +51,7 @@ module ActiveMerchant #:nodoc:
           add_refund(xml, money, authorization, options)
         end
 
-        commit(request)
+        commit(:refund, request)
       end
 
       def void(authorization, options = {})
@@ -59,7 +59,7 @@ module ActiveMerchant #:nodoc:
           add_void(xml, authorization)
         end
 
-        commit(request)
+        commit(:void, request)
       end
 
       def verify(credit_card, options = {})
@@ -72,6 +72,7 @@ module ActiveMerchant #:nodoc:
       def supports_scrubbing?
         true
       end
+
 
       def scrub(transcript)
         clean_transcript = remove_invalid_utf_8_byte_sequences(transcript)
@@ -102,7 +103,7 @@ module ActiveMerchant #:nodoc:
 
       def generate_signature(http_method, xml, timestamp)
         content_type = 'text/xml; charset=utf-8'
-        message = "#{http_method}\n#{Digest::MD5.hexdigest(xml)}\n#{content_type}\n#{timestamp}\n\n/transaction"
+        message = "#{http_method}\n#{Digest::SHA512.hexdigest(xml)}\n#{content_type}\n#{timestamp}\n\n/transaction"
         digest = OpenSSL::Digest.new('sha512')
         hmac = OpenSSL::HMAC.digest(digest, @secret, message)
 
@@ -118,7 +119,7 @@ module ActiveMerchant #:nodoc:
 
       def build_xml_request
         builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-          xml.transactionWithCard 'xmlns' => 'http://secure.ixopay.com/Schema/V2/TransactionWithCard' do
+          xml.transactionWithCard 'xmlns' => 'https://secure.cardflo.io/Schema/V2/TransactionWithCard' do
             xml.username @options[:username]
             xml.password Digest::SHA1.hexdigest(@options[:password])
             yield(xml)
@@ -261,6 +262,7 @@ module ActiveMerchant #:nodoc:
       # Furthermore, Ixopay is slightly unusual in its application of stored
       # credentials in that the gateway does not return a true
       # network_transaction_id that can be sent on subsequent transactions.
+
       def add_stored_credentials(xml, options)
         return unless stored_credential = options[:stored_credential]
 
@@ -279,8 +281,9 @@ module ActiveMerchant #:nodoc:
         end
       end
 
-      def commit(request)
+      def commit(action, request)
         url = (test? ? test_url : live_url)
+        url = "#{url}/#{options[:api_key]}/#{action}"
 
         # ssl_post raises an exception for any non-2xx HTTP status from the gateway
         response =
