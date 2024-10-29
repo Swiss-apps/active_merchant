@@ -4,15 +4,22 @@ module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class IxopayGateway < Gateway
       self.test_url = 'https://secure.cardflo.io/transaction'
-      self.live_url = 'https://secure.ixopay.com/transaction'
+      self.live_url = 'https://secure.cardflo.com/transaction'
 
       self.supported_countries = %w(AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW)
       self.default_currency = 'EUR'
       self.currencies_with_three_decimal_places = %w(BHD IQD JOD KWD LWD OMR TND)
-      self.supported_cardtypes = %i[visa master american_express discover diners_club jcb maestro]
+      self.supported_cardtypes = %i[visa master american_express discover diners_club]
 
       self.homepage_url = 'https://www.ixopay.com'
       self.display_name = 'Ixopay'
+
+      SUCCESS_CODE = '111111111' # TODO check once API works
+
+      # there aren't soft and hard error categories in the docs
+      # 2022 - 3D-Secure Soft declined code
+      # TODO check other code in the docs https://gateway.cardflo.io/documentation/gateway#error-codes
+      SOFT_DECLINE_CODES = %w{2022}.freeze
 
       def initialize(options = {})
         requires!(options, :username, :password, :secret, :api_key)
@@ -276,19 +283,20 @@ module ActiveMerchant #:nodoc:
       end
 
       def add_extra_data(xml, extra_data)
+        # get data from confirm request
+        # add 3ds options
         extra_data.each do |k, v|
           xml.extraData(v, key: k)
         end
       end
 
       def commit(action, request)
-        url = (test? ? test_url : live_url)
-        url = "#{url}/#{options[:api_key]}/#{action}"
-
+        request_endpoint = url(action, @options[:api_key])
+        p request
         # ssl_post raises an exception for any non-2xx HTTP status from the gateway
         response =
           begin
-            parse(ssl_post(url, request, headers(request)))
+            parse(ssl_post(request_endpoint, request, headers(request)))
           rescue StandardError => error
             parse(error.response.body)
           end
@@ -297,10 +305,35 @@ module ActiveMerchant #:nodoc:
           success_from(response),
           message_from(response),
           response,
+          error_code: error_code_from(succeeded, response),
           authorization: authorization_from(response),
+          avs_result: nil,
+          cvv_result: nil,
           test: test?,
-          error_code: error_code_from(response)
+          response_type: response_type(response[:response_code]&.to_i),
+          response_http_code: @response_http_code,
+          request_endpoint: url,
+          request_method: :post,
+          request_body: request
         )
+      end
+
+      def base_url
+        test? ? test_url : live_url
+      end
+
+      def url(action, api_key)
+        "#{base_url}/#{api_key}/#{action}"
+      end
+
+      def response_type(code)
+        if code == SUCCESS_CODE
+          0
+        elsif SOFT_DECLINE_CODES.include?(code)
+          1
+        else
+          2
+        end
       end
 
       def success_from(response)
