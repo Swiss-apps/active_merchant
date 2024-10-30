@@ -4,7 +4,8 @@ module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class IxopayGateway < Gateway
       self.test_url = 'https://secure.cardflo.io/transaction'
-      self.live_url = 'https://secure.cardflo.com/transaction'
+      self.live_url = 'https://secure.cardflo.io/transaction'
+      TRANSACTION_WITH_CARD_URL = 'https://secure.cardflo.io/Schema/V2/TransactionWithCard'
 
       self.supported_countries = %w(AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW)
       self.default_currency = 'EUR'
@@ -80,7 +81,6 @@ module ActiveMerchant #:nodoc:
         true
       end
 
-
       def scrub(transcript)
         clean_transcript = remove_invalid_utf_8_byte_sequences(transcript)
 
@@ -126,7 +126,7 @@ module ActiveMerchant #:nodoc:
 
       def build_xml_request
         builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-          xml.transactionWithCard 'xmlns' => 'https://secure.cardflo.io/Schema/V2/TransactionWithCard' do
+          xml.transactionWithCard 'xmlns' => TRANSACTION_WITH_CARD_URL do
             xml.username @options[:username]
             xml.password Digest::SHA1.hexdigest(@options[:password])
             yield(xml)
@@ -269,7 +269,6 @@ module ActiveMerchant #:nodoc:
       # Furthermore, Ixopay is slightly unusual in its application of stored
       # credentials in that the gateway does not return a true
       # network_transaction_id that can be sent on subsequent transactions.
-
       def add_stored_credentials(xml, options)
         return unless stored_credential = options[:stored_credential]
 
@@ -292,7 +291,6 @@ module ActiveMerchant #:nodoc:
 
       def commit(action, request)
         request_endpoint = url(action, @options[:api_key])
-        p request
         # ssl_post raises an exception for any non-2xx HTTP status from the gateway
         response =
           begin
@@ -305,13 +303,11 @@ module ActiveMerchant #:nodoc:
           success_from(response),
           message_from(response),
           response,
-          error_code: error_code_from(succeeded, response),
           authorization: authorization_from(response),
-          avs_result: nil,
-          cvv_result: nil,
           test: test?,
+          error_code: error_code_from(succeeded, response),
           response_type: response_type(response[:response_code]&.to_i),
-          response_http_code: @response_http_code,
+          response_http_code: response.code.to_i,
           request_endpoint: url,
           request_method: :post,
           request_body: request
