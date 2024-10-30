@@ -304,8 +304,8 @@ module ActiveMerchant #:nodoc:
           message_from(response),
           response,
           authorization: authorization_from(response),
+          error_code: error_code_from(response)
           test: test?,
-          error_code: error_code_from(succeeded, response),
           response_type: response_type(response[:response_code]&.to_i),
           response_http_code: response.code.to_i,
           request_endpoint: url,
