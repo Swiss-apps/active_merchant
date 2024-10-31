@@ -17,10 +17,7 @@ module ActiveMerchant #:nodoc:
 
       SUCCESS_CODE = '111111111' # TODO check once API works
 
-      # there aren't soft and hard error categories in the docs
-      # 2022 - 3D-Secure Soft declined code
-      # TODO check other code in the docs https://gateway.cardflo.io/documentation/gateway#error-codes
-      SOFT_DECLINE_CODES = %w{2022}.freeze
+      SOFT_DECLINE_CODES = %w{2003 2004 2005 2006 2007 2008 2009 2019 2020 2021 2022}.freeze
 
       def initialize(options = {})
         requires!(options, :username, :password, :secret, :api_key)
