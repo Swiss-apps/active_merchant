@@ -289,6 +289,7 @@ module ActiveMerchant #:nodoc:
       def commit(action, request)
         request_endpoint = url(action, @options[:api_key])
         # ssl_post raises an exception for any non-2xx HTTP status from the gateway
+
         response =
           begin
             parse(ssl_post(request_endpoint, request, headers(request)))
@@ -302,7 +303,7 @@ module ActiveMerchant #:nodoc:
           response,
           authorization: authorization_from(response),
           test: test?,
-          error_code: error_code_from(response)
+          error_code: error_code_from(response),
           response_type: response_type(response[:response_code]&.to_i),
           response_http_code: response.code.to_i,
           request_endpoint: url,
