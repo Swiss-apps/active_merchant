@@ -127,7 +127,6 @@ module ActiveMerchant #:nodoc:
         post[:identity] = identity_id
         add_payment_method(post, payment_source, options)
         add_address(post, options)
-
         commit('payment_instruments', post, nil, options)
       end
 
@@ -164,7 +163,8 @@ module ActiveMerchant #:nodoc:
       def add_payment_method(post, payment_source, options)
         billing                 = options[:billing_address] || {}
         post[:type]             = 'TOKEN'
-        post[:token]             = payment_source[:gateway_payment_profile_id]
+        post[:fraud_session_id] = payment_source[:finix_fraud_session_id]
+        post[:token]            = payment_source[:gateway_payment_profile_id]
       end
 
       def add_invoice(post, amount, options)
@@ -249,6 +249,7 @@ module ActiveMerchant #:nodoc:
             amount: params[:amount],
             currency: params[:currency] || default_currency,
             merchant: @merchant_id,
+            fraud_session_id: params[:fraud_session_id],
             source: params[:instrument_id],
             idempotency_id: params[:idempotency_id],
             tags: params[:tags]
