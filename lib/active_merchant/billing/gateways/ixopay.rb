@@ -3,16 +3,21 @@ require 'nokogiri'
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class IxopayGateway < Gateway
-      self.test_url = 'https://secure.ixopay.com/transaction'
-      self.live_url = 'https://secure.ixopay.com/transaction'
+      self.test_url = 'https://secure.cardflo.io/transaction'
+      self.live_url = 'https://secure.cardflo.io/transaction'
+      TRANSACTION_WITH_CARD_URL = 'https://secure.cardflo.io/Schema/V2/TransactionWithCard'
 
       self.supported_countries = %w(AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW)
       self.default_currency = 'EUR'
       self.currencies_with_three_decimal_places = %w(BHD IQD JOD KWD LWD OMR TND)
-      self.supported_cardtypes = %i[visa master american_express discover diners_club jcb maestro]
+      self.supported_cardtypes = %i[visa master american_express discover diners_club]
 
       self.homepage_url = 'https://www.ixopay.com'
       self.display_name = 'Ixopay'
+
+      SUCCESS_CODE = '111111111' # TODO check once API works
+
+      SOFT_DECLINE_CODES = %w{2003 2004 2005 2006 2007 2008 2009 2019 2020 2021 2022}.freeze
 
       def initialize(options = {})
         requires!(options, :username, :password, :secret, :api_key)
@@ -26,7 +31,7 @@ module ActiveMerchant #:nodoc:
           add_debit(xml, money, options)
         end
 
-        commit(request)
+        commit(:debit, request)
       end
 
       def authorize(money, payment_method, options = {})
@@ -35,7 +40,7 @@ module ActiveMerchant #:nodoc:
           add_preauth(xml, money, options)
         end
 
-        commit(request)
+        commit(:preauthorize, request)
       end
 
       def capture(money, authorization, options = {})
@@ -43,7 +48,7 @@ module ActiveMerchant #:nodoc:
           add_capture(xml, money, authorization, options)
         end
 
-        commit(request)
+        commit(:capture, request)
       end
 
       def refund(money, authorization, options = {})
@@ -51,7 +56,7 @@ module ActiveMerchant #:nodoc:
           add_refund(xml, money, authorization, options)
         end
 
-        commit(request)
+        commit(:refund, request)
       end
 
       def void(authorization, options = {})
@@ -59,7 +64,7 @@ module ActiveMerchant #:nodoc:
           add_void(xml, authorization)
         end
 
-        commit(request)
+        commit(:void, request)
       end
 
       def verify(credit_card, options = {})
@@ -102,7 +107,7 @@ module ActiveMerchant #:nodoc:
 
       def generate_signature(http_method, xml, timestamp)
         content_type = 'text/xml; charset=utf-8'
-        message = "#{http_method}\n#{Digest::MD5.hexdigest(xml)}\n#{content_type}\n#{timestamp}\n\n/transaction"
+        message = "#{http_method}\n#{Digest::SHA512.hexdigest(xml)}\n#{content_type}\n#{timestamp}\n\n/transaction"
         digest = OpenSSL::Digest.new('sha512')
         hmac = OpenSSL::HMAC.digest(digest, @secret, message)
 
@@ -118,7 +123,7 @@ module ActiveMerchant #:nodoc:
 
       def build_xml_request
         builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-          xml.transactionWithCard 'xmlns' => 'http://secure.ixopay.com/Schema/V2/TransactionWithCard' do
+          xml.transactionWithCard 'xmlns' => TRANSACTION_WITH_CARD_URL do
             xml.username @options[:username]
             xml.password Digest::SHA1.hexdigest(@options[:password])
             yield(xml)
@@ -274,18 +279,20 @@ module ActiveMerchant #:nodoc:
       end
 
       def add_extra_data(xml, extra_data)
+        # get data from confirm request
+        # add 3ds options
         extra_data.each do |k, v|
           xml.extraData(v, key: k)
         end
       end
 
-      def commit(request)
-        url = (test? ? test_url : live_url)
-
+      def commit(action, request)
+        request_endpoint = url(action, @options[:api_key])
         # ssl_post raises an exception for any non-2xx HTTP status from the gateway
+
         response =
           begin
-            parse(ssl_post(url, request, headers(request)))
+            parse(ssl_post(request_endpoint, request, headers(request)))
           rescue StandardError => error
             parse(error.response.body)
           end
@@ -296,8 +303,31 @@ module ActiveMerchant #:nodoc:
           response,
           authorization: authorization_from(response),
           test: test?,
-          error_code: error_code_from(response)
+          error_code: error_code_from(response),
+          response_type: response_type(response[:response_code]&.to_i),
+          response_http_code: response.code.to_i,
+          request_endpoint: url,
+          request_method: :post,
+          request_body: request
         )
+      end
+
+      def base_url
+        test? ? test_url : live_url
+      end
+
+      def url(action, api_key)
+        "#{base_url}/#{api_key}/#{action}"
+      end
+
+      def response_type(code)
+        if code == SUCCESS_CODE
+          0
+        elsif SOFT_DECLINE_CODES.include?(code)
+          1
+        else
+          2
+        end
       end
 
       def success_from(response)
